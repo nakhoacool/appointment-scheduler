@@ -7,6 +7,7 @@ A RESTful **vehicle service appointment booking** API built with Node.js, Expres
 ## Table of Contents
 
 - [Features](#features)
+- [Architecture](#architecture)
 - [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
 - [Project Structure](#project-structure)
@@ -14,6 +15,7 @@ A RESTful **vehicle service appointment booking** API built with Node.js, Expres
 - [Configuration](#configuration)
 - [Switching to MySQL / PostgreSQL](#switching-to-mysql--postgresql)
 - [OpenAPI Spec](#openapi-spec)
+- [AI Collaboration Narrative](#ai-collaboration-narrative)
 
 ---
 
@@ -26,6 +28,28 @@ A RESTful **vehicle service appointment booking** API built with Node.js, Expres
 - **Zod validation** on every request body / query string
 - **Structured JSON logging** via Pino
 - **OpenAPI 3.1 specification** at `docs/openapi.yaml`
+
+---
+
+## Architecture
+
+The full architecture design — including requirements, component diagram, data-flow walkthrough, database schema, and key design decisions — is documented in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+### High-Level Overview
+
+The system is built as a **Modular Monolith** — a single deployable unit with strict internal module boundaries, making it straightforward to extract individual modules into services if scale demands it later.
+
+| Layer | Technology |
+|-------|------------|
+| HTTP / Routing | Express + TypeScript |
+| Validation | Zod (request bodies & query strings) |
+| Authentication | JWT via `jose` |
+| Business Logic | Domain use-cases (clean architecture) |
+| Data Access | Prisma ORM v7 with driver adapter |
+| Database | SQLite (dev) — portable to MySQL 8 / PostgreSQL |
+| Logging | Pino (structured JSON) |
+
+The booking flow guarantees **no double-bookings** by wrapping the availability check and appointment insert inside a single serializable database transaction. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full data-flow diagram and conflict-resolution path.
 
 ---
 
@@ -212,3 +236,40 @@ While the server is running, endpoint exposes the spec directly:
 | `npm run db:seed` | Seed reference data + test account |
 | `npm run db:reset` | Drop DB, re-migrate, re-seed |
 | `npm run db:studio` | Open Prisma Studio (visual DB browser) |
+
+---
+
+## AI Collaboration Narrative
+
+### Guiding Strategy
+
+The AI (GitHub Copilot) was treated as a **pair programmer with broad technical knowledge but no project context** — it needed to be directed precisely rather than asked open-ended questions. The core strategy was to decompose the project into discrete, well-scoped tasks and issue each one as a focused prompt, rather than attempting to generate large chunks of code in a single pass.
+
+Tasks were sequenced deliberately:
+
+1. **Scaffolding first** — schema, migrations, and seed data established a working database foundation before any application code was written.
+2. **Domain layer before infrastructure** — repository interfaces and Zod schemas were defined before wiring HTTP routes, so the AI worked outward from stable contracts.
+3. **One concern per prompt** — each prompt addressed a single layer or feature (e.g., "implement the booking use-case with a serializable transaction", "add Zod validation to every route"), preventing the AI from making unasked-for structural changes elsewhere.
+4. **Explicit constraints were stated upfront** — the target runtime version, the Prisma v7 driver-adapter pattern, the clean-architecture folder layout, and the no-double-booking requirement were all declared in the first prompt so the AI could not drift toward incompatible patterns.
+
+### Verifying and Refining Output
+
+Each AI-generated file went through a consistent review loop before being accepted:
+
+| Step | What was checked |
+|------|------------------|
+| **Compile check** | `npm run build` — TypeScript errors surfaced missing types, incorrect imports, and API mismatches immediately |
+| **Test run** | `npm run test` — the Vitest suite validated business rules (no double-booking, availability logic, JWT round-trips) against an in-memory SQLite database |
+| **Manual path audit** | File paths (e.g. `__dirname`-relative paths for `docs/openapi.yaml`) were traced by hand to confirm they resolved correctly at runtime |
+| **Security review** | SQL injection surface (Prisma parameterised queries only), JWT signing/verification, Zod strict-mode validation, and `httpOnly`-appropriate headers were verified against OWASP Top 10 |
+| **Diff inspection** | Every suggested change was read line-by-line in the editor diff view before acceptance — no blind "accept all" |
+
+When the AI produced incorrect output (e.g. a wrong relative path for the OpenAPI file, a Swagger UI URL that did not resolve correctly from the browser), the error was diagnosed precisely and fed back as a corrective prompt with the exact symptom and the expected behaviour, rather than asking the AI to "try again".
+
+### Ensuring Final Quality
+
+- **Tests as the acceptance gate** — no feature was considered done until all 59 tests passed. The suite covers auth, booking conflict prevention, availability slot calculation, and Zod schema validation.
+- **TypeScript strict mode** — `"strict": true` in `tsconfig.json` meant the compiler caught any type unsoundness the AI introduced.
+- **Layer isolation enforced** — the AI was corrected whenever it reached across layer boundaries (e.g. importing Prisma types directly into a use-case file). Repository interfaces in `src/domain/repositories/` stayed the only cross-layer contract.
+- **Incremental commits** — each logical unit of work (schema, auth, booking, availability, reference data, Swagger UI) was committed separately, giving clear rollback points and making AI-generated diffs easy to audit in isolation.
+- **README kept in sync** — documentation was updated alongside code rather than written once at the end, so any last-minute corrections to paths or commands were caught before the final push.
