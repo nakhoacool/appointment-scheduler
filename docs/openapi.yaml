@@ -1,0 +1,575 @@
+openapi: "3.1.0"
+info:
+  title: Appointment Scheduler API
+  version: "1.0.0"
+  description: |
+    RESTful API for booking vehicle service appointments at dealerships.
+
+    **Authentication**
+    Protected endpoints require a Bearer JWT obtained from `POST /api/auth/login`
+    or `POST /api/auth/register`. Pass it as:
+    ```
+    Authorization: Bearer <token>
+    ```
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+
+tags:
+  - name: Auth
+    description: Register and login
+  - name: Customers
+    description: Customer profile and vehicle management
+  - name: Appointments
+    description: Book, view, and cancel appointments
+  - name: Reference
+    description: Dealerships, service types, and availability
+
+# ──────────────────────────────────────────────────────────────────────────────
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      tags: [Reference]
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  timestamp: { type: string, format: date-time }
+
+  # ── Auth ────────────────────────────────────────────────────────────────────
+
+  /api/auth/register:
+    post:
+      summary: Register a new customer account
+      operationId: register
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+
+  /api/auth/login:
+    post:
+      summary: Login and receive a JWT
+      operationId: login
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  # ── Customers ───────────────────────────────────────────────────────────────
+
+  /api/customers/me:
+    get:
+      summary: Get the authenticated customer's profile
+      operationId: getProfile
+      tags: [Customers]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Customer profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /api/customers/me/vehicles:
+    get:
+      summary: List vehicles belonging to the authenticated customer
+      operationId: listVehicles
+      tags: [Customers]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Array of vehicles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Vehicle"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+    post:
+      summary: Add a vehicle to the customer's account
+      operationId: addVehicle
+      tags: [Customers]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddVehicleRequest"
+      responses:
+        "201":
+          description: Vehicle created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  # ── Appointments ────────────────────────────────────────────────────────────
+
+  /api/appointments:
+    post:
+      summary: Book a service appointment
+      operationId: createAppointment
+      tags: [Appointments]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAppointmentRequest"
+            example:
+              vehicleId: "veh-test"
+              serviceTypeId: "st-oil-change"
+              dealershipId: "dl-downtown"
+              desiredStartTime: "2026-04-01T09:00:00.000Z"
+      responses:
+        "201":
+          description: Appointment confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppointmentDetail"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          description: No availability for the requested time slot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: CONFLICT
+                message: No service bay is available for the requested time slot
+
+    get:
+      summary: List all appointments for the authenticated customer
+      operationId: listAppointments
+      tags: [Appointments]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Array of appointments (sorted by start time, ascending)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AppointmentDetail"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /api/appointments/{id}:
+    get:
+      summary: Get a single appointment by ID
+      operationId: getAppointment
+      tags: [Appointments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/idParam"
+      responses:
+        "200":
+          description: Appointment detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppointmentDetail"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+
+  /api/appointments/{id}/cancel:
+    patch:
+      summary: Cancel an appointment
+      operationId: cancelAppointment
+      tags: [Appointments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/idParam"
+      responses:
+        "200":
+          description: Appointment cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          description: Already cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Reference ───────────────────────────────────────────────────────────────
+
+  /api/dealerships:
+    get:
+      summary: List all dealerships (with active bays + technician count)
+      operationId: listDealerships
+      tags: [Reference]
+      responses:
+        "200":
+          description: Array of dealerships
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DealershipSummary"
+
+  /api/service-types:
+    get:
+      summary: List all service types
+      operationId: listServiceTypes
+      tags: [Reference]
+      responses:
+        "200":
+          description: Array of service types
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServiceType"
+
+  /api/dealerships/{id}/availability:
+    get:
+      summary: Check slot availability for a dealership on a given date
+      operationId: getDealershipAvailability
+      tags: [Reference]
+      parameters:
+        - $ref: "#/components/parameters/idParam"
+        - name: serviceTypeId
+          in: query
+          required: true
+          schema:
+            type: string
+          example: st-oil-change
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          example: "2026-04-01"
+        - name: hour
+          in: query
+          required: false
+          description: Restrict probe to a single UTC hour (0–23)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 23
+      responses:
+        "200":
+          description: Availability slots
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvailabilityResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+# ──────────────────────────────────────────────────────────────────────────────
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    idParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+
+  # ── Schemas ─────────────────────────────────────────────────────────────────
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [name, email, password]
+      properties:
+        name: { type: string, example: Jane Doe }
+        email: { type: string, format: email, example: jane@example.com }
+        password: { type: string, minLength: 8, example: "secret123" }
+        phone: { type: string, example: "+1-555-0101" }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, example: test@example.com }
+        password: { type: string, example: "password123" }
+
+    AuthResponse:
+      type: object
+      properties:
+        customer:
+          $ref: "#/components/schemas/Customer"
+        token:
+          type: string
+          description: JWT Bearer token (expires in 7 days)
+
+    Customer:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    AddVehicleRequest:
+      type: object
+      required: [make, model, year, licensePlate]
+      properties:
+        make: { type: string, example: Toyota }
+        model: { type: string, example: Camry }
+        year: { type: integer, example: 2021 }
+        licensePlate: { type: string, example: "ABC-1234" }
+
+    Vehicle:
+      type: object
+      properties:
+        id: { type: string }
+        customerId: { type: string }
+        make: { type: string }
+        model: { type: string }
+        year: { type: integer }
+        licensePlate: { type: string }
+
+    CreateAppointmentRequest:
+      type: object
+      required: [vehicleId, serviceTypeId, dealershipId, desiredStartTime]
+      properties:
+        vehicleId:
+          type: string
+          description: ID of the customer's vehicle
+        serviceTypeId:
+          type: string
+          description: ID of the desired service
+        dealershipId:
+          type: string
+          description: ID of the dealership
+        desiredStartTime:
+          type: string
+          format: date-time
+          description: Desired UTC start time in ISO 8601 format
+
+    Appointment:
+      type: object
+      properties:
+        id: { type: string }
+        customerId: { type: string }
+        vehicleId: { type: string }
+        serviceTypeId: { type: string }
+        technicianId: { type: string }
+        serviceBayId: { type: string }
+        dealershipId: { type: string }
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        status:
+          type: string
+          enum: [pending, confirmed, cancelled, completed]
+        createdAt: { type: string, format: date-time }
+
+    AppointmentDetail:
+      allOf:
+        - $ref: "#/components/schemas/Appointment"
+        - type: object
+          properties:
+            customer: { $ref: "#/components/schemas/Customer" }
+            vehicle: { $ref: "#/components/schemas/Vehicle" }
+            serviceType: { $ref: "#/components/schemas/ServiceType" }
+            technician:
+              type: object
+              properties:
+                id: { type: string }
+                name: { type: string }
+            serviceBay:
+              type: object
+              properties:
+                id: { type: string }
+                bayNumber: { type: integer }
+            dealership:
+              type: object
+              properties:
+                id: { type: string }
+                name: { type: string }
+
+    ServiceType:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        durationMinutes: { type: integer }
+        requiredSkill: { type: string }
+
+    DealershipSummary:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        address: { type: string }
+        serviceBays:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              bayNumber: { type: integer }
+        _count:
+          type: object
+          properties:
+            technicians: { type: integer }
+
+    AvailabilityResponse:
+      type: object
+      properties:
+        dealershipId: { type: string }
+        serviceTypeId: { type: string }
+        date: { type: string, format: date }
+        slots:
+          type: array
+          items:
+            type: object
+            properties:
+              startTime: { type: string, format: date-time }
+              endTime: { type: string, format: date-time }
+              available: { type: boolean }
+
+    ErrorResponse:
+      type: object
+      properties:
+        error: { type: string }
+        message: { type: string }
+        details: {}
+
+  # ── Reusable Responses ──────────────────────────────────────────────────────
+
+  responses:
+    ValidationError:
+      description: Request payload failed validation
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: VALIDATION_ERROR
+            message: Invalid request body
+            details:
+              fieldErrors:
+                email: ["Invalid email"]
+
+    UnauthorizedError:
+      description: Missing or invalid JWT
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: UNAUTHORIZED
+            message: Invalid or expired token
+
+    ForbiddenError:
+      description: Authenticated but not allowed to access this resource
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: FORBIDDEN
+            message: Forbidden
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: NOT_FOUND
+            message: Appointment not found
+
+    ConflictError:
+      description: Resource conflict (e.g. duplicate email)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: CONFLICT
+            message: Email already registered

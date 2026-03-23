@@ -1,0 +1,5 @@
+export { PrismaAuthRepository } from './prisma-auth.repository'
+export { PrismaAvailabilityRepository } from './prisma-availability.repository'
+export { PrismaBookingRepository } from './prisma-booking.repository'
+export { PrismaCustomersRepository } from './prisma-customers.repository'
+export { PrismaReferenceRepository } from './prisma-reference.repository'
