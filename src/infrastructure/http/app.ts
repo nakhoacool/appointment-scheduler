@@ -39,6 +39,10 @@ app.get('/health', (_req, res) =>
 // ── OpenAPI spec & Swagger UI ────────────────────────────────────────────────
 const OPENAPI_PATH = path.resolve(__dirname, '../../../docs/openapi.yaml')
 
+app.get('/openapi.yaml', (_req: Request, res: Response) => {
+  res.sendFile(OPENAPI_PATH)
+})
+
 app.get('/docs', (req: Request, res: Response) => {
   const specUrl = `${req.protocol}://${req.get('host')}/openapi.yaml`
   res.setHeader('Content-Type', 'text/html')

@@ -1,4 +1,6 @@
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/client'
 import type { PrismaClient } from '../prisma'
+import { ConflictError } from '../../../errors'
 import type {
   ICustomersRepository,
   CustomerProfileRecord,
@@ -33,8 +35,20 @@ export class PrismaCustomersRepository implements ICustomersRepository {
     customerId: string,
     data: CreateVehicleData,
   ): Promise<VehicleRecord> {
-    return this.db.vehicle.create({
-      data: { ...data, customerId },
-    })
+    try {
+      return await this.db.vehicle.create({
+        data: { ...data, customerId },
+      })
+    } catch (err) {
+      if (
+        err instanceof PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        throw new ConflictError(
+          `A vehicle with license plate '${data.licensePlate}' already exists`,
+        )
+      }
+      throw err
+    }
   }
 }

@@ -153,8 +153,10 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/UnauthorizedError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
 
-  # ── Appointments ────────────────────────────────────────────────────────────
+  # ── Appointments ─────────────────────────────────────────────────────────────
 
   /api/appointments:
     post:
