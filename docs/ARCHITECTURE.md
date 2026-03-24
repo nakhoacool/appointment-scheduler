@@ -217,8 +217,6 @@ CREATE INDEX idx_appt_dealership  ON appointments(dealership_id,  status);
 
 ### ADR-001: Modular Monolith over Microservices
 
-**Status:** Accepted
-
 **Context:** The core booking flow requires an atomic check-and-book operation across two resources (bay + technician). In a microservice topology, this would require a distributed transaction or saga pattern — significant operational and code complexity for an assignment-scale system.
 
 **Decision:** Package the system as a single deployable with well-defined internal module boundaries (`BookingModule`, `AvailabilityModule`, `NotificationModule`).
@@ -236,8 +234,6 @@ CREATE INDEX idx_appt_dealership  ON appointments(dealership_id,  status);
 
 ### ADR-002: MySQL 8 `SELECT FOR UPDATE SKIP LOCKED` for Concurrency Control
 
-**Status:** Accepted
-
 **Context:** Two concurrent booking requests for the same time slot could both pass the availability check and then both write, causing a double-booking. A naive check-then-insert pattern is not safe.
 
 **Decision:** Wrap the availability check and appointment insert in a single InnoDB transaction. Use `SELECT … FOR UPDATE SKIP LOCKED` on the bay and technician rows so competing transactions lock different rows rather than blocking each other. MySQL 8.0+ supports `SKIP LOCKED` natively.
@@ -254,8 +250,6 @@ CREATE INDEX idx_appt_dealership  ON appointments(dealership_id,  status);
 ---
 
 ### ADR-003: Async Notification via Job Queue
-
-**Status:** Accepted
 
 **Context:** Sending confirmation email/SMS involves an external HTTP call (50–500 ms). Blocking the booking response on this call degrades perceived performance and couples booking reliability to notification provider uptime.
 
